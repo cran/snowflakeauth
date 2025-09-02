@@ -40,6 +40,9 @@
 #'   See [Snowflake's
 #'   documentation](https://docs.snowflake.com/en/developer-guide/python-connector/python-connector-connect#connecting-using-the-connections-toml-file)
 #'   for details.
+#' @param .verbose Logical; if `TRUE`, prints detailed information about
+#'   configuration loading, including which files are read and how connection
+#'   parameters are resolved. Defaults to `FALSE`.
 #'
 #' @returns An object of class `"snowflake_connection"`.
 #' @examplesIf has_a_default_connection()
@@ -64,10 +67,22 @@
 #'   private_key = "rsa_key.p8"
 #' )
 #' @export
-snowflake_connection <- function(name = NULL, ..., .config_dir = NULL) {
+snowflake_connection <- function(
+  name = NULL,
+  ...,
+  .config_dir = NULL,
+  .verbose = FALSE
+) {
   # Load configuration
   config_dir <- .config_dir %||% default_config_dir()
-  cfg <- load_config(name, config_dir)
+
+  if (.verbose) {
+    cli::cli_inform(c(
+      "i" = "Loading Snowflake configuration from: {.path {config_dir}}"
+    ))
+  }
+
+  cfg <- load_config(name, config_dir, .verbose = .verbose)
 
   # Extract connection data
   connections <- cfg$connections
@@ -103,7 +118,11 @@ snowflake_connection <- function(name = NULL, ..., .config_dir = NULL) {
 
   # Setup authenticator
   params$authenticator <- params$authenticator %||% "snowflake"
-  if (!is_empty(params$private_key) || !is_empty(params$private_key_file)) {
+  if (
+    !is_empty(params$private_key) ||
+      !is_empty(params$private_key_file) ||
+      !is_empty(params$private_key_path)
+  ) {
     params$authenticator <- "SNOWFLAKE_JWT"
   }
 
@@ -184,6 +203,8 @@ print.snowflake_redacted <- function(x, ...) {
 #' @param name A named connection to use. If NULL, the default connection will be used
 #' @param config_dir The directory containing Snowflake configuration files.
 #'   Defaults to the result of `default_config_dir()`.
+#' @param .verbose Logical; if TRUE, prints detailed information about
+#'   configuration loading process.
 #'
 #' @return A list with the following components:
 #'   \item{connections}{List of available connection configurations}
@@ -192,7 +213,11 @@ print.snowflake_redacted <- function(x, ...) {
 #'
 #' @keywords internal
 #' @noRd
-load_config <- function(name = NULL, config_dir = default_config_dir()) {
+load_config <- function(
+  name = NULL,
+  config_dir = default_config_dir(),
+  .verbose = FALSE
+) {
   # Initialize result structure
   result <- list(
     connections = list(),
@@ -213,11 +238,21 @@ load_config <- function(name = NULL, config_dir = default_config_dir()) {
   # Set from explicit parameter if provided
   if (!is.null(name)) {
     result$connection_name <- name
+    if (.verbose) {
+      cli::cli_inform(c(
+        "i" = "Using connection name from parameter: {.str {name}}"
+      ))
+    }
   } else {
     # Check environment variable
     env_connection_name <- Sys.getenv("SNOWFLAKE_DEFAULT_CONNECTION_NAME", "")
     if (nzchar(env_connection_name)) {
       result$connection_name <- env_connection_name
+      if (.verbose) {
+        cli::cli_inform(c(
+          "i" = "Using connection name from SNOWFLAKE_DEFAULT_CONNECTION_NAME: {.str {env_connection_name}}"
+        ))
+      }
     }
   }
 
@@ -225,6 +260,9 @@ load_config <- function(name = NULL, config_dir = default_config_dir()) {
   has_connections_toml <- file.exists(connections_toml)
 
   if (has_config_toml) {
+    if (.verbose) {
+      cli::cli_inform(c("i" = "Found config.toml at: {.path {config_toml}}"))
+    }
     config <- RcppTOML::parseTOML(config_toml, fromFile = TRUE)
 
     # If no connection name yet, get from config.toml
@@ -233,6 +271,11 @@ load_config <- function(name = NULL, config_dir = default_config_dir()) {
         !is.null(config$default_connection_name)
     ) {
       result$connection_name <- config$default_connection_name
+      if (.verbose) {
+        cli::cli_inform(c(
+          "i" = "Using default_connection_name from config.toml: {.str {config$default_connection_name}}"
+        ))
+      }
     }
 
     if (
@@ -240,17 +283,32 @@ load_config <- function(name = NULL, config_dir = default_config_dir()) {
         "default" %in% names(config$connections)
     ) {
       result$connection_name <- "default"
+      if (.verbose) {
+        cli::cli_inform(c(
+          "i" = "Found [default] section in config.toml"
+        ))
+      }
     }
 
     # Extract connections section if it exists
     if (!is.null(config$connections)) {
       result$connections <- config$connections
       result$connection_file <- config_toml
+      if (.verbose) {
+        cli::cli_inform(c(
+          "i" = "Loaded {length(config$connections)} connection{?s} from config.toml"
+        ))
+      }
     }
   }
 
   # Load connections.toml (takes precedence if both exist)
   if (has_connections_toml) {
+    if (.verbose) {
+      cli::cli_inform(c(
+        "i" = "Found connections.toml at: {.path {connections_toml}}"
+      ))
+    }
     connections <- RcppTOML::parseTOML(connections_toml, fromFile = TRUE)
 
     # If both files exist, inform user we're using connections.toml
@@ -277,14 +335,38 @@ load_config <- function(name = NULL, config_dir = default_config_dir()) {
     result$connections <- connections
     result$connection_file <- connections_toml
 
+    if (.verbose && length(connections) > 0) {
+      cli::cli_inform(c(
+        "i" = "Loaded {length(connections)} connection{?s} from connections.toml"
+      ))
+    }
+
     # Set default connection name if not already set and "default" exists
     if (is.null(result$connection_name) && !is.null(connections[["default"]])) {
       result$connection_name <- "default"
+      if (.verbose) {
+        cli::cli_inform(c(
+          "i" = "Found [default] section in connections.toml"
+        ))
+      }
     }
   }
 
+  # No configuration files found
+  if (.verbose) {
+    cli::cli_inform(c(
+      "i" = "No configuration files found in: {.path {config_dir}}"
+    ))
+  }
   # Step 3: Process environment variables
   env_config <- parse_env_vars()
+
+  if (.verbose && length(env_config) > 0) {
+    env_names <- names(env_config)
+    cli::cli_inform(c(
+      "i" = "Found environment variables for connection{?s}: {.str {env_names}}"
+    ))
+  }
 
   # Apply environment variables to connections
   if (
@@ -295,6 +377,14 @@ load_config <- function(name = NULL, config_dir = default_config_dir()) {
     if (is.null(result$connections[[result$connection_name]])) {
       result$connections[[result$connection_name]] <- list()
     }
+
+    if (.verbose) {
+      env_params <- names(env_config[[result$connection_name]])
+      cli::cli_inform(c(
+        "i" = "Applying environment variables for {.str {result$connection_name}}: {.field {env_params}}"
+      ))
+    }
+
     result$connections[[result$connection_name]] <- utils::modifyList(
       result$connections[[result$connection_name]],
       env_config[[result$connection_name]]
@@ -306,6 +396,12 @@ load_config <- function(name = NULL, config_dir = default_config_dir()) {
     # Create a default connection from generic env vars
     result$connections$default <- env_config$default
     result$connection_name <- "default"
+
+    if (.verbose) {
+      cli::cli_inform(c(
+        "i" = "Applying environment variables for default connection"
+      ))
+    }
   } else if (!is.null(env_config$default)) {
     # Apply generic env vars as fallback to specific connection
     if (!is.null(result$connection_name)) {
@@ -313,14 +409,34 @@ load_config <- function(name = NULL, config_dir = default_config_dir()) {
         result$connections[[result$connection_name]] <- env_config$default
       } else {
         # Only apply values that don't already exist in the connection
+        applied_vars <- character()
         for (name in names(env_config$default)) {
           if (is.null(result$connections[[result$connection_name]][[name]])) {
             result$connections[[result$connection_name]][[
               name
             ]] <- env_config$default[[name]]
+            applied_vars <- c(applied_vars, name)
           }
         }
+
+        if (.verbose && length(applied_vars) > 0) {
+          cli::cli_inform(c(
+            "i" = "Applied environment variables: {.field {applied_vars}}"
+          ))
+        }
       }
+    }
+  }
+
+  if (.verbose && !is.null(result$connection_name)) {
+    cli::cli_inform(c(
+      "i" = "Using connection name: {.str {result$connection_name}}"
+    ))
+
+    if (!is.null(result$connection_file)) {
+      cli::cli_inform(c(
+        "i" = "Using configuration from: {.path {result$connection_file}}"
+      ))
     }
   }
 
@@ -340,7 +456,7 @@ default_config_dir <- function(os = NULL) {
   # Check environment variables first
   snowflake_home_env <- Sys.getenv("SNOWFLAKE_HOME")
   if (nzchar(snowflake_home_env)) {
-    return(snowflake_home_env)
+    return(path.expand(snowflake_home_env))
   }
 
   snowflake_home <- path.expand("~/.snowflake")
@@ -371,7 +487,7 @@ default_config_dir <- function(os = NULL) {
     unix = "~/.config/snowflake"
   )
 
-  os_paths[[os]]
+  path.expand(os_paths[[os]])
 }
 
 #' Reports whether a default connection is available
@@ -423,6 +539,7 @@ parse_env_vars <- function() {
     "SNOWFLAKE_WAREHOUSE",
     "SNOWFLAKE_AUTHENTICATOR",
     "SNOWFLAKE_PRIVATE_KEY_PATH",
+    "SNOWFLAKE_PRIVATE_KEY_FILE",
     "SNOWFLAKE_PRIVATE_KEY_RAW",
     "SNOWFLAKE_SESSION_TOKEN",
     "SNOWFLAKE_MASTER_TOKEN",
