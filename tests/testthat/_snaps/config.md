@@ -61,8 +61,8 @@
       snowflake_connection("test5", .config_dir = dir)
     Condition
       Error in `snowflake_connection()`:
-      ! An `account` parameter is required when './connections.toml' is missing or empty.
-      i Pass `account` or define a [test5] section with an account field in './connections.toml'.
+      ! The default connection name "test5" is not defined in './connections.toml'.
+      i Define a [test5] section in './connections.toml', pass another connection by `name`, or pass connection parameters to `snowflake_connection()` directly.
 
 ---
 
@@ -86,8 +86,8 @@
       snowflake_connection(.config_dir = dir)
     Condition
       Error in `snowflake_connection()`:
-      ! An `account` parameter is required when './connections.toml' is missing or empty.
-      i Pass `account` or define a [] section with an account field in './connections.toml'.
+      ! No default connection defined in './connections.toml'.
+      i Define a [default] section in './connections.toml', pass another connection by `name`, or pass connection parameters to `snowflake_connection()` directly.
 
 ---
 
@@ -109,7 +109,6 @@
     Code
       snowflake_connection(.config_dir = config_dir)
     Message
-      ! Both 'connections.toml' and 'config.toml' exist. Using 'connections.toml'.
       <Snowflake connection: secondary>
       account: "secondary-test-account"
       role: "role"
@@ -123,7 +122,7 @@
     Condition
       Error in `snowflake_connection()`:
       ! An `account` parameter is required when '/CONFIG_DIR/connections.toml' is missing or empty.
-      i Pass `account` or define a [] section with an account field in '/CONFIG_DIR/connections.toml'.
+      i Pass `account` or define a [default] section with an account field in '/CONFIG_DIR/connections.toml'.
 
 # with incoming field values, connections.toml is not required
 
@@ -142,9 +141,29 @@
     Code
       snowflake_connection()
     Message
-      ! Both 'connections.toml' and 'config.toml' exist. Using 'connections.toml'.
       <Snowflake connection: workbench>
       account: "testorg-test_account"
       authenticator: "oauth"
       token: <REDACTED>
+
+# warning appears when both files define connections
+
+    Code
+      snowflake_connection(.config_dir = config_dir)
+    Message
+      ! Both 'connections.toml' and 'config.toml' define connections. 'connections.toml' takes precedence.
+      <Snowflake connection: default>
+      account: "testorg-from-connections"
+      role: "role"
+      user: "user"
+      authenticator: "snowflake"
+
+# error message is clear when named connection requested but file missing
+
+    Code
+      snowflake_connection("myconnection", .config_dir = config_dir)
+    Condition
+      Error in `snowflake_connection()`:
+      ! Named connection "myconnection" refers to a section in '/CONFIG_DIR/connections.toml', but that file does not exist.
+      i Create it and define a [myconnection] section, or omit the `name` parameter.
 

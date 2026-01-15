@@ -61,12 +61,6 @@ snowflake_connection(
   private_key_file = "rsa_key.p8",
   private_key_file_pwd = "supersecret"
 )
-
-snowflake_connection(
-  account = "myaccount",
-  user = "me",
-  authenticator = "externalbrowser"
-)
 ```
 
 These parameters can then be used to retrieve credentials, which take
@@ -75,26 +69,38 @@ the form of a one or more of HTTP headers:
 ``` r
 conn <- snowflake_connection(
   account = "myaccount",
-  user = "me",
-  authenticator = "oauth",
-  token = "token"
+  user = "myuser@company.com",
+  authenticator = "externalbrowser"
 )
 
 snowflake_credentials(conn)
 ```
 
+## Supported Authentication Methods
+
+The following table details authentication methods supported by
+`snowflake_credentials()`:
+
+| Method | Supported | Notes |
+|----|:--:|:---|
+| Browser-based SSO | ✅ | Interactive, desktop-only |
+| Key-pair | ✅ |  |
+| OAuth token | ✅ |  |
+| Workload identity federation | ❌ |  |
+| Programmatic access token (PAT) | ❌ |  |
+| OAuth 2.0 client credentials | ❌ | Rarely used, not planned |
+| OAuth 2.0 authorization code | ❌ | Rarely used, not planned |
+| Username and password | ❌ | Insecure, not planned |
+| Username and password with MFA | ❌ | Not planned |
+| Native SSO (Okta-only) | ❌ | Superceded by other methods, not planned |
+
 ## Limitations
 
-- No support for SSO authentication using a browser.
+- Browser-based authentication is known to fail in Positron, but should
+  work in RStudio.
 
-- No support for [connection
+- No support for on-disk [connection
   caching](https://docs.snowflake.com/en/user-guide/admin-security-fed-auth-use#using-connection-caching-to-minimize-the-number-of-prompts-for-authentication-optional).
-
-- No support for direct username/password authentication,
-  username/password authentication with MFA, or [“Native SSO”
-  authentication](https://docs.snowflake.com/en/user-guide/admin-security-fed-auth-use#native-sso-okta-only),
-  (which is Okta-only). These are not planned; please migrate to OAuth
-  or key-pair authentication when a browser is not available.
 
 ## License
 

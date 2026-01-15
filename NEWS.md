@@ -1,3 +1,13 @@
+# snowflakeauth 0.2.1
+
+* Misleading warnings about the `config.toml` and `connections.toml` files both
+  existing have been removed (#25).
+* Error messages when a named connection is requested but the `connections.toml`
+  file does not exist are now clearer (#23).
+* Error messages when `connections.toml` exists but lacks a needed connection are
+  now more specific and helpful (#26).
+* `externalbrowser` authentication is now supported.
+
 # snowflakeauth 0.2.0
 
 * `jose` and `openssl` have been upgraded to required dependencies.

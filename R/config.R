@@ -92,6 +92,14 @@ snowflake_connection <- function(
 
   # Error if the specified connection doesn't exist
   if (!is.null(connection_name) && is.null(connections[[connection_name]])) {
+    if (!file.exists(connection_file)) {
+      cli::cli_abort(c(
+        "Named connection {.str {connection_name}} refers to a section in
+         {.file {connection_file}}, but that file does not exist.",
+        i = "Create it and define a {.field [{connection_name}]} section, or
+             omit the {.arg name} parameter."
+      ))
+    }
     cli::cli_abort(c(
       "Unknown connection {.str {connection_name}}.",
       i = "Try defining a {.field [{connection_name}]} section in {.file {connection_file}} or
@@ -110,9 +118,31 @@ snowflake_connection <- function(
 
   # Validate that account is provided
   if (is_empty(params$account)) {
+    # Give *highly specific* errors depending on how the user can resolve
+    # various cases.
+    if (!file.exists(connection_file) || length(connections) == 0) {
+      section_name <- connection_name %||% "default"
+      cli::cli_abort(c(
+        "An {.arg account} parameter is required when {.file {connection_file}}
+         is missing or empty.",
+        i = "Pass {.arg account} or define a {.field [{section_name}]}
+             section with an {.field account} field in {.file {connection_file}}."
+      ))
+    }
+    if (is.null(connection_name)) {
+      cli::cli_abort(c(
+        "No default connection defined in {.file {connection_file}}.",
+        i = "Define a {.field [default]} section in {.file {connection_file}},
+             pass another connection by {.arg name}, or pass connection
+             parameters to {.fn snowflake_connection} directly."
+      ))
+    }
     cli::cli_abort(c(
-      "An {.arg account} parameter is required when {.file {connection_file}} is missing or empty.",
-      i = "Pass {.arg account} or define a {.field [{connection_name}]} section with an {.field account} field in {.file {connection_file}}."
+      "The default connection name {.str {connection_name}} is not defined in
+       {.file {connection_file}}.",
+      i = "Define a {.field [{connection_name}]} section in
+           {.file {connection_file}}, pass another connection by {.arg name}, or
+           pass connection parameters to {.fn snowflake_connection} directly."
     ))
   }
 
@@ -141,6 +171,13 @@ snowflake_connection <- function(
   if (params$authenticator == "SNOWFLAKE_JWT" && is.null(params$user)) {
     cli::cli_abort(c(
       "A {.arg user} parameter is required when using key-pair authentication."
+    ))
+  }
+
+  # Validate external browser authentication
+  if (params$authenticator == "externalbrowser" && is.null(params$user)) {
+    cli::cli_abort(c(
+      "A {.arg user} parameter is required when using external browser authentication."
     ))
   }
 
@@ -311,10 +348,11 @@ load_config <- function(
     }
     connections <- RcppTOML::parseTOML(connections_toml, fromFile = TRUE)
 
-    # If both files exist, inform user we're using connections.toml
-    if (has_config_toml && length(connections) > 0) {
+    # If both files define connections, inform the user that connections.toml
+    # takes precedence.
+    if (length(result$connections) > 0 && length(connections) > 0) {
       cli::cli_inform(c(
-        "!" = "Both {.file connections.toml} and {.file config.toml} exist. Using {.file connections.toml}."
+        "!" = "Both {.file connections.toml} and {.file config.toml} define connections. {.file connections.toml} takes precedence."
       ))
 
       # Validate that connection name from config.toml exists in connections.toml
