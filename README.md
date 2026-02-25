@@ -86,7 +86,7 @@ The following table details authentication methods supported by
 | Browser-based SSO | ✅ | Interactive, desktop-only |
 | Key-pair | ✅ |  |
 | OAuth token | ✅ |  |
-| Workload identity federation | ❌ |  |
+| Workload identity federation | ✅ | OIDC only |
 | Programmatic access token (PAT) | ❌ |  |
 | OAuth 2.0 client credentials | ❌ | Rarely used, not planned |
 | OAuth 2.0 authorization code | ❌ | Rarely used, not planned |
@@ -98,9 +98,6 @@ The following table details authentication methods supported by
 
 - Browser-based authentication is known to fail in Positron, but should
   work in RStudio.
-
-- No support for on-disk [connection
-  caching](https://docs.snowflake.com/en/user-guide/admin-security-fed-auth-use#using-connection-caching-to-minimize-the-number-of-prompts-for-authentication-optional).
 
 ## License
 

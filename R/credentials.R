@@ -43,6 +43,7 @@ snowflake_credentials <- function(
       spcs_endpoint,
       role
     ),
+    WORKLOAD_IDENTITY = workload_identity_credentials(params),
     externalbrowser = externalbrowser_credentials(params),
     cli::cli_abort(c(
       "Unsupported authenticator: {.str {params$authenticator}}.",
@@ -118,12 +119,26 @@ has_expired <- function(expires_at, .now = Sys.time()) {
 }
 
 # Generic helper for calls to the /login-request endpoint.
-login_request <- function(account, data, extra_headers = list()) {
+login_request <- function(account, data, user = NULL, extra_headers = list()) {
   url <- sprintf(
     "https://%s.snowflakecomputing.com/session/v1/login-request",
     account
   )
-  body <- jsonlite::toJSON(list(data = data), auto_unbox = TRUE)
+  base_params <- list(
+    # Snowflake seems to whitelist what clients can request ID tokens, so
+    # masquerade as the Python Connector for now.
+    CLIENT_APP_ID = "PythonConnector",
+    CLIENT_APP_VERSION = "4.2.0",
+    ACCOUNT_NAME = account,
+    SESSION_PARAMETERS = list(
+      # Request ID tokens, if allowed by the administrator.
+      CLIENT_STORE_TEMPORARY_CREDENTIAL = TRUE
+    )
+  )
+  if (!is.null(user)) {
+    base_params$LOGIN_NAME <- user
+  }
+  body <- jsonlite::toJSON(list(data = c(base_params, data)), auto_unbox = TRUE)
   headers <- c(
     extra_headers,
     `Content-Type` = "application/json",
@@ -136,15 +151,39 @@ login_request <- function(account, data, extra_headers = list()) {
 
   resp <- curl::curl_fetch_memory(url, handle)
   if (resp$status_code >= 400) {
-    cli::cli_abort(c(
-      "Snowflake login request failed",
-      i = "Status code: {.strong {resp$status_code}}"
-    ))
+    # Try to extract error details from the response body.
+    detail <- NULL
+    tryCatch(
+      {
+        content <- jsonlite::fromJSON(
+          rawToChar(resp$content),
+          simplifyVector = FALSE
+        )
+        if (!is.null(content$code) && !is.null(content$message)) {
+          detail <- sprintf("Error %s: %s", content$code, content$message)
+        }
+      },
+      error = function(e) NULL
+    )
+    cli::cli_abort(
+      c(
+        "Snowflake login request failed with status {resp$status_code}",
+        i = detail
+      )
+    )
   }
 
   content <- jsonlite::fromJSON(rawToChar(resp$content), simplifyVector = FALSE)
-  if (!isTRUE(content$success) || is.null(content$data)) {
-    cli::cli_abort("Received unexpected response during login request")
+  if (!isTRUE(content$success)) {
+    detail <- if (!is.null(content$code) && !is.null(content$message)) {
+      sprintf("Error %s: %s", content$code, content$message)
+    } else {
+      content$message %||% "No error details available"
+    }
+    cli::cli_abort(c("Snowflake login request failed", i = detail))
+  }
+  if (is.null(content$data)) {
+    cli::cli_abort("Received unexpected response during login request: missing data")
   }
 
   snowflake_session(content$data)

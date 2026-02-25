@@ -1,6 +1,6 @@
 Package: snowflakeauth
 Title: Authentication Helpers for 'Snowflake'
-Version: 0.2.1
+Version: 0.2.2
 Authors@R: c(
     person("Aaron", "Jacobs", , "aaron.jacobs@posit.co", role = c("aut")),
     person("E. David", "Aja", , "david@posit.co", role = c("aut", "cre")),
@@ -13,17 +13,17 @@ Description: Authentication helpers for 'Snowflake'.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Imports: cli, curl, jsonlite, RcppTOML, rlang, jose, openssl
-Suggests: httpuv, testthat (>= 3.0.0), withr
+Suggests: httpuv, keyring, testthat (>= 3.0.0), withr
 RoxygenNote: 7.3.2
 Config/testthat/edition: 3
 URL: https://posit-dev.github.io/snowflakeauth/,
         https://github.com/posit-dev/snowflakeauth
 BugReports: https://github.com/posit-dev/snowflakeauth/issues
 NeedsCompilation: no
-Packaged: 2026-01-14 19:44:11 UTC; edavidaja
+Packaged: 2026-02-24 17:45:53 UTC; edavidaja
 Author: Aaron Jacobs [aut],
   E. David Aja [aut, cre],
   Posit Software, PBC [cph, fnd]
 Maintainer: E. David Aja <david@posit.co>
 Repository: CRAN
-Date/Publication: 2026-01-15 06:10:02 UTC
+Date/Publication: 2026-02-25 06:30:23 UTC
