@@ -1,3 +1,16 @@
+# snowflakeauth 0.3.0
+
+* [Local Snowflake OAuth][local_oauth] authentication is now supported. Requires
+  the `httpuv` package (#41).
+
+* The `host` field in `connections.toml` files is now supported.
+
+* Account identifiers are now normalised when generating JWTs for key-pair
+  authentication, so that regional, PrivateLink, and "global" account formats
+  work as expected (#37).
+
+[local_oauth]: https://docs.snowflake.com/en/user-guide/oauth-local-applications
+
 # snowflakeauth 0.2.2
 
 * [On-disk connection caching][id_tokens] in the system keyring is now

@@ -5,7 +5,8 @@ keypair_credentials <- function(
   private_key,
   private_key_pwd = NULL,
   spcs_endpoint = NULL,
-  role = "PUBLIC"
+  role = "PUBLIC",
+  host = NULL
 ) {
   jwt <- generate_jwt(account, user, private_key, private_key_pwd)
   # Important: the SPCS ingress handles key-pair authentication *differently*
@@ -24,13 +25,24 @@ keypair_credentials <- function(
   if (grepl("^https?://", spcs_endpoint)) {
     spcs_endpoint <- sub("^https?://", "", spcs_endpoint)
   }
-  account_url <- sprintf("https://%s.snowflakecomputing.com", account)
+  account_url <- snowflake_url(host, account)
   token <- exchange_jwt_for_token(account_url, jwt, spcs_endpoint, role)
   # Yes, this is actually the format of the Authorization header that SPCS
   # requires.
   return(list(
     Authorization = sprintf('Snowflake Token="%s"', token$access_token)
   ))
+}
+
+# Snowflake expects the JWT issuer and subject claims to use the bare account
+# identifier, without any region, cloud, PrivateLink, or organisation part. This
+# matches the normalisation performed by the Snowflake Python connector.
+jwt_account_identifier <- function(account) {
+  if (grepl(".global", account, fixed = TRUE)) {
+    strsplit(account, "-", fixed = TRUE)[[1]][1]
+  } else {
+    strsplit(account, ".", fixed = TRUE)[[1]][1]
+  }
 }
 
 # Generate a JWT that can be used for Snowflake "key-pair" authentication.
@@ -59,7 +71,7 @@ generate_jwt <- function(
   # We can't use openssl::fingerprint() here because it uses a different
   # algorithm than Snowflake does.
   fp <- openssl::base64_encode(openssl::sha256(openssl::write_der(key$pubkey)))
-  sub <- toupper(paste0(account, ".", user))
+  sub <- toupper(paste0(jwt_account_identifier(account), ".", user))
   # Note: Snowflake employs a malformed issuer claim, so we have to inject it
   # manually after jose's validation phase.
   claim <- jose::jwt_claim(
